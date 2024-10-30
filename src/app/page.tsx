@@ -1,11 +1,13 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import * as React from "react";
+import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -45,46 +47,78 @@ import { cn } from "@/lib/utils";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-// Function to fetch data from the API
-// async function fetchData() {
-//   const res = await fetch("http://localhost:5000");
-//   const data = await res.json();
-//   return data;
-// }
 
-const PropertyTypes = [
-  {
-    value: "next.js",
-    label: "Next.js",
-  },
-  {
-    value: "sveltekit",
-    label: "SvelteKit",
-  },
-  {
-    value: "nuxt.js",
-    label: "Nuxt.js",
-  },
-  {
-    value: "remix",
-    label: "Remix",
-  },
-  {
-    value: "astro",
-    label: "Astro",
-  },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Type for listing items
+interface Listing {
+  _id: string;
+  name: string;
+  summary: string;
+  address: {
+    market: string;
+  };
+  property_type: string;
+  bedrooms: number;
+  review_scores: {
+    review_scores_rating: number;
+  };
+}
+async function fetchData(url: string): Promise<any> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+  return res.json();
+}
+
+
 
 export default function Home() {
-  // const res = await fetch("http://localhost:5000");
-  // let data = await res.json();
-  // console.log(data);
+  // State to store fetched data
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [bedroomOptions, setBedroomOptions] = useState<string[]>([]);
+  const [propertyTypes, setPropertyTypes] = useState<[]>([]);
+  // loading state that trigger the skeleton loader
+  const [loading, setLoading] = useState(true);
+  //identify a search result so we can display different
+  const [isSearchResult, setIsSearchResult] = useState(false);
+
+  // // Fetch data to client side
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        const [listingsData, bedroomData, propertyData] = await Promise.all([
+          fetchData("http://localhost:5000/listings"),
+          fetchData("http://localhost:5000/listings/filter/bedroom"),
+          fetchData("http://localhost:5000/listings/filter/property_type"),
+        ]);
+        //set the data to the state
+        setListings(listingsData);
+        setBedroomOptions(bedroomData);
+        setPropertyTypes(propertyData);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
+  // Map values to use with drop down
+  const mappedPropertyTypes = propertyTypes.map((type) => ({
+    value: type,
+    label: type, // same text for label
+  }));
+  const mappedBedroomOptions = bedroomOptions.map((option) => ({
+    value: option,
+    label: option, // same text for label
+  }));
 
   // 1. Define form.
   const FormSchema = z.object({
@@ -103,11 +137,32 @@ export default function Home() {
     },
   });
   // 2. Define a submit handler.
-  function onSubmit(values: z.infer<typeof FormSchema>) {
-    // Do something with the form values.
-    // ✅ This will be type-safe and validated.
-    console.log("Form errors:", form.formState.errors); // Check for errors
-    console.log("Form Submitted with values:", values);
+  async function onSubmit(values: z.infer<typeof FormSchema>) {
+    // ✅ Submit the form data to the server  and update the listings'
+    setLoading(true); // enter loading
+    setIsSearchResult(true); //this is a search result
+    try {
+      // Construct the URL with query parameters based on form values
+      const queryString = new URLSearchParams(
+        values as Record<string, string>
+      ).toString();
+      const response = await fetch(
+        `http://localhost:5000/listings/find?${queryString}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setListings(data); // Update listings with fetched data to refresh scrollable area
+
+      console.log("Form Submitted with values:", values);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false); // exit loading state
+    }
   }
   // Clear function to reset the form
   const clearForm = () => {
@@ -118,13 +173,87 @@ export default function Home() {
     });
     setValue("");
   };
-  //popover select
+  //popover select search
   const [open, setOpen] = React.useState(false);
   const [value, setValue] = React.useState("");
+
+  // Display the skeleton loader while loading
+  const LoadingSkeleton = () => (
+    <div className="flex flex-col space-y-3">
+      <Skeleton className="h-[auto] w-[full] rounded-xl" />
+      <div className="space-y-2">
+        <h1>Just a moment . . .</h1>
+        <Skeleton className="h-8 w-[full]" />
+        <Skeleton className="h-6 w-[60%]" />
+        <Skeleton className="h-4 w-[80%]" />
+        <Skeleton className="h-8 w-[full]" />
+        <Skeleton className="h-5 w-[30%]" />
+        <Skeleton className="h-8 w-[70%]" />
+        <Skeleton className="h-8 w-[50%]" />
+        <Skeleton className="h-5 w-[full]" />
+        <Skeleton className="h-8 w-[full]" />
+        <Skeleton className="h-6 w-[60%]" />
+        <Skeleton className="h-4 w-[80%]" />
+        <Skeleton className="h-8 w-[full]" />
+        <Skeleton className="h-5 w-[30%]" />
+        <Skeleton className="h-8 w-[70%]" />
+        <Skeleton className="h-8 w-[50%]" />
+        <Skeleton className="h-5 w-[full]" />
+        <Skeleton className="h-4 w-[80%]" />
+        <Skeleton className="h-8 w-[full]" />
+      </div>
+    </div>
+  );
+  // router
+  const router = useRouter();
+  // Display search results as cards
+  const ListingCards = () => (
+    <>
+      {isSearchResult && (
+        <h1 className="pb-3 text-lg sticky top-0 w-full bg-white">
+          <strong>Your search returned {listings.length} results</strong>
+        </h1>
+      )}
+      {listings.map((listing) => (
+        <Card key={listing._id} className="h-[auto] w-[full] mb-3">
+          <CardHeader>
+            <CardTitle>
+              <span
+                onClick={() => router.push(`/booking/${listing._id}`)}
+                className="text-blue-600 hover:underline cursor-pointer"
+              >
+                {listing.name}
+              </span>
+            </CardTitle>
+            <CardDescription>
+              {listing.summary || `Property in ${listing.address.market}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">
+              <strong>Location:</strong> {listing.address.market || "n/a"}{" "}
+              <br />
+              <strong>Property type:</strong> {listing.property_type || "n/a"}{" "}
+              <br />
+              <strong>Number of bedrooms:</strong> {listing.bedrooms || "n/a"}
+            </p>
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <p className="text-sm">
+              <strong>Review Score:</strong>{" "}
+              {listing.review_scores.review_scores_rating || "Not yet rated"}
+            </p>
+          </CardFooter>
+        </Card>
+      ))}
+    </>
+  );
+
+  // ui render
   return (
     <>
       <div className="flex flex-row h-screen">
-        <div className="h-[full] w-[30%] rounded-sm border p-5">
+        <div className="h-[full] w-[30%] rounded-sm  border-t-0  pt-3 pb-4 pl-5 pr-5">
           <Card className="w-[full] border-0 shadow-none">
             <CardHeader>
               <CardTitle>Find Property</CardTitle>
@@ -148,7 +277,7 @@ export default function Home() {
                             <FormControl>
                               <Input
                                 id="Location"
-                                placeholder="Enter a destination"
+                                placeholder="Search..."
                                 {...field}
                               />
                             </FormControl>
@@ -170,13 +299,17 @@ export default function Home() {
                               value={field.value || ""}
                             >
                               <SelectTrigger id="Bedrooms">
-                                <SelectValue placeholder="Select number of bedroom" />
+                                <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent position="popper">
-                                <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="2">2</SelectItem>
-                                <SelectItem value="3">3</SelectItem>
-                                <SelectItem value="4">4</SelectItem>
+                                {mappedBedroomOptions.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value.toString()}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </FormItem>
@@ -200,18 +333,18 @@ export default function Home() {
                                   className="w-[full] justify-between"
                                 >
                                   {value
-                                    ? PropertyTypes.find(
-                                        (PropertyType) =>
-                                          PropertyType.value === value
+                                    ? mappedPropertyTypes.find(
+                                        (propertyType) =>
+                                          propertyType.value === value
                                       )?.label
-                                    : "Select a type"}
+                                    : "Select"}
                                   <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50 w-[full]" />
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[full] p-0">
                                 <Command>
                                   <CommandInput
-                                    placeholder="Search a type"
+                                    placeholder="Search a Property Type"
                                     className="h-9"
                                   />
                                   <CommandList>
@@ -219,25 +352,25 @@ export default function Home() {
                                       No PropertyType found.
                                     </CommandEmpty>
                                     <CommandGroup>
-                                      {PropertyTypes.map((PropertyType) => (
+                                      {mappedPropertyTypes.map((type) => (
                                         <CommandItem
-                                          key={PropertyType.value}
-                                          value={PropertyType.value}
+                                          key={type.value}
+                                          value={type.value}
                                           onSelect={(currentValue) => {
-                                            field.onChange(currentValue); // Update form state
+                                            field.onChange(currentValue);
                                             setValue(
                                               currentValue === field.value
                                                 ? ""
                                                 : currentValue
-                                            ); // Update local state
+                                            );
                                             setOpen(false);
                                           }}
                                         >
-                                          {PropertyType.label}
+                                          {type.label}
                                           <CheckIcon
                                             className={cn(
                                               "ml-auto h-4 w-4",
-                                              value === PropertyType.value
+                                              value === type.value
                                                 ? "opacity-100"
                                                 : "opacity-0"
                                             )}
@@ -271,14 +404,34 @@ export default function Home() {
             </CardContent>
           </Card>
         </div>
-        <ScrollArea className="h-[auto] w-[70%] rounded-sm border p-10">
-          Jokester began sneaking into the castle in the middle of the night and
-          leaving jokes all over the place: under the king's pillow, in his
-          soup, even in the royal toilet. The king was furious, but he couldn't
-          seem to stop Jokester. And then, one day, the people of the kingdom
-          discovered that the jokes left by Jokester were so funny that they
-          couldn't help but laugh. And once they started laughing, they couldn't
-          stop.
+        <Separator
+          orientation="vertical"
+          className=" h-[70%]  self-center"
+        />
+        <ScrollArea className="h-[auto] w-[70%] rounded-sm border-t-0 p-10">
+          {loading ? (
+            <LoadingSkeleton />
+          ) : listings.length > 0 ? (
+            <ListingCards />
+          ) : (
+            <div className="flex flex-col space-y-3">
+              <h1>
+                <strong>Uh, Oh! No results found</strong>
+              </h1>
+              <p>
+                Try changing your search criteria or{" "}
+                <a
+                  href="http://localhost:3000"
+                  className="text-blue-600 hover:underline"
+                >
+                  view all listings
+                </a>
+              </p>
+              <p className="text-red-500">
+                TIPS: Location field is Case-Sensitive
+              </p>
+            </div>
+          )}
         </ScrollArea>
       </div>
     </>
